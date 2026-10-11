@@ -1,0 +1,48 @@
+name: Build unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Archive for iOS (unsigned)
+        run: |
+          xcodebuild \
+            -project Folium.xcodeproj \
+            -scheme Folium \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -archivePath build/Folium.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            archive
+
+      - name: Package .ipa
+        run: |
+          APP_PATH=$(find build/Folium.xcarchive/Products/Applications -maxdepth 1 -name '*.app' | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "Nessuna .app trovata nell'archivio" >&2
+            exit 1
+          fi
+          mkdir -p ipa/Payload
+          cp -R "$APP_PATH" ipa/Payload/
+          (cd ipa && zip -qr "$GITHUB_WORKSPACE/Folium-unsigned.ipa" Payload)
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Folium-unsigned-ipa
+          path: Folium-unsigned.ipa
+          if-no-files-found: error
