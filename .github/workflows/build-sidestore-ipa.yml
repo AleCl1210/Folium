@@ -42,12 +42,26 @@ jobs:
             echo 'Errore: un sottomodulo non e stato scaricato.' >&2
             exit 1
           fi
-      - name: Verifica Xcode usato
+
+      # SharedDependencies/nihstro include Boost.Spirit e cerca gli header in
+      # /usr/local/include; il runner macOS arm64 installa Homebrew altrove.
+      - name: Prepara gli header Boost per nihstro
+        shell: bash
         run: |
-          echo "ImageOS=$ImageOS ImageVersion=$ImageVersion"
-          echo "DEVELOPER_DIR=${DEVELOPER_DIR:-non impostata}"
-          xcode-select -p
-          xcodebuild -version
+          set -euo pipefail
+          if [ ! -f /usr/local/include/boost/spirit/include/qi.hpp ]; then
+            HOMEBREW_NO_AUTO_UPDATE=1 brew install boost
+            boost_headers="$(brew --prefix boost)/include/boost"
+            test -f "$boost_headers/spirit/include/qi.hpp"
+            sudo mkdir -p /usr/local/include
+            if [ -e /usr/local/include/boost ] || [ -L /usr/local/include/boost ]; then
+              echo 'Esiste /usr/local/include/boost ma manca boost/spirit/include/qi.hpp' >&2
+              exit 1
+            fi
+            sudo ln -s "$boost_headers" /usr/local/include/boost
+          fi
+          test -f /usr/local/include/boost/spirit/include/qi.hpp
+
       - name: Compila Folium per iPhone e iPad senza firma
         shell: bash
         working-directory: Folium
