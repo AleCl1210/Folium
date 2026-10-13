@@ -42,7 +42,12 @@ jobs:
             echo 'Errore: un sottomodulo non e stato scaricato.' >&2
             exit 1
           fi
-
+      - name: Verifica Xcode usato
+        run: |
+          echo "ImageOS=$ImageOS ImageVersion=$ImageVersion"
+          echo "DEVELOPER_DIR=${DEVELOPER_DIR:-non impostata}"
+          xcode-select -p
+          xcodebuild -version
       - name: Compila Folium per iPhone e iPad senza firma
         shell: bash
         working-directory: Folium
