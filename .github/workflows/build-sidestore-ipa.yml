@@ -87,9 +87,9 @@ jobs:
             exit 0
           else
             status=$?
-            diagnostics="$(grep -E '(^|[[:space:]])(error|warning):|fatal error:|Undefined symbols|ld: |BUILD FAILED|Command .* failed' "$log_file" | tail -n 45 || true)"
+            diagnostics="$(grep -E 'error:|Undefined symbols|ld: |BUILD FAILED|Command .* failed|No such module|could not build module|Swift Compiler Error' "$log_file" | tail -n 25 || true)"
             if [ -z "$diagnostics" ]; then
-              diagnostics="$(tail -n 45 "$log_file" || true)"
+              diagnostics="$(tail -n 25 "$log_file" || true)"
             fi
             echo '::group::Diagnostica xcodebuild'
             while IFS= read -r line; do
