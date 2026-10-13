@@ -46,6 +46,37 @@ jobs:
             exit 1
           fi
 
+      # Il target Cytrus del progetto cerca gli header nell'SDK Vulkan 1.4.363.0.
+      - name: Installa Vulkan SDK per Cytrus
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=1.4.363.0
+          expected_sha256=163431e0203c8215286a17cf393643ce6b951f77d1b4f74ab30821a1f0beb09b
+          archive="$RUNNER_TEMP/vulkansdk-macos-${version}.zip"
+          extract_dir="$RUNNER_TEMP/vulkan-sdk"
+          sdk_root="$HOME/VulkanSDK/${version}"
+
+          curl --fail --location --show-error --retry 3 --retry-delay 5 \
+            "https://sdk.lunarg.com/sdk/download/${version}/mac/vulkansdk-macos-${version}.zip" \
+            --output "$archive"
+          printf '%s  %s\n' "$expected_sha256" "$archive" | shasum -a 256 --check
+          mkdir -p "$extract_dir"
+          unzip -q "$archive" -d "$extract_dir"
+
+          installer_app="$(find "$extract_dir" -maxdepth 3 -type d \
+            -name "vulkansdk-macOS-${version}.app" -print -quit)"
+          test -n "$installer_app"
+          installer="$installer_app/Contents/MacOS/vulkansdk-macOS-${version}"
+          test -x "$installer"
+          "$installer" --root "$sdk_root" \
+            --accept-licenses --default-answer --confirm-command \
+            install com.lunarg.vulkan.core com.lunarg.vulkan.vma
+
+          test -f "$sdk_root/macOS/include/vulkan/vulkan.hpp"
+          test -f "$sdk_root/macOS/include/vma/vk_mem_alloc.h"
+          test -f "$sdk_root/macOS/include/glslang/SPIRV/GlslangToSpv.h"
+
       # SharedDependencies/nihstro include Boost.Spirit e cerca gli header in
       # /usr/local/include; il runner macOS arm64 installa Homebrew altrove.
       - name: Prepara gli header Boost per nihstro
