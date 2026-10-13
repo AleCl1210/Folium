@@ -4,6 +4,9 @@ name: Folium - IPA per SideStore
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - arena/1f88a72b-folium
 
 permissions:
   contents: read
