@@ -1,0 +1,92 @@
+# Copia questo file nel tuo fork, in .github/workflows/build-sidestore-ipa.yml.
+# Genera un IPA NON firmato: SideStore lo firma sul dispositivo durante l'installazione.
+name: Folium - IPA per SideStore
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-unsigned-ipa:
+    # Il progetto Folium pubblico e stato salvato con Xcode 27.
+    runs-on: xcode-27
+    timeout-minutes: 120
+
+    steps:
+      - name: Scarica il fork e tutti i sottomoduli
+        uses: actions/checkout@v4
+        with:
+          path: Folium
+          submodules: recursive
+          persist-credentials: false
+
+      # Folium.xcodeproj fa riferimento al pacchetto locale ../AntiqueKit.
+      - name: Scarica AntiqueKit accanto a Folium
+        uses: actions/checkout@v4
+        with:
+          repository: jarrodnorwell/AntiqueKit
+          path: AntiqueKit
+          persist-credentials: false
+
+      - name: Controlla ambiente e sorgenti
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          test -f Folium/Folium.xcodeproj/project.pbxproj
+          test -f AntiqueKit/Package.swift
+          git -C Folium submodule status --recursive
+          if git -C Folium submodule status --recursive | grep -Eq '^[-U]'; then
+            echo 'Errore: un sottomodulo non e stato scaricato.' >&2
+            exit 1
+          fi
+
+      - name: Compila Folium per iPhone e iPad senza firma
+        shell: bash
+        working-directory: Folium
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project Folium.xcodeproj \
+            -scheme Folium \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/folium-derived-data" \
+            -jobs 2 \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            build
+
+      - name: Impacchetta e verifica l'IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$RUNNER_TEMP/folium-derived-data/Build/Products/Release-iphoneos/Folium.app"
+          ipa="$GITHUB_WORKSPACE/ipa/Folium-SideStore.ipa"
+          test -d "$app"
+          executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")
+          bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")
+          test -f "$app/$executable"
+          echo "App: $bundle_id ($executable)"
+          xcrun lipo -archs "$app/$executable" | grep -qw arm64
+
+          mkdir -p "$RUNNER_TEMP/folium-package/Payload" "$GITHUB_WORKSPACE/ipa"
+          ditto "$app" "$RUNNER_TEMP/folium-package/Payload/Folium.app"
+          (cd "$RUNNER_TEMP/folium-package" && \
+            ditto -c -k --sequesterRsrc --keepParent Payload "$ipa")
+          unzip -tq "$ipa"
+          unzip -p "$ipa" Payload/Folium.app/Info.plist >/dev/null
+          ls -lh "$ipa"
+
+      - name: Carica l'IPA come artefatto
+        uses: actions/upload-artifact@v4
+        with:
+          name: Folium-SideStore
+          path: ipa/Folium-SideStore.ipa
+          if-no-files-found: error
+          retention-days: 14
